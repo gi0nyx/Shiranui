@@ -117,7 +117,8 @@
                 romajiInput.classList.add('correct');
                 correct++; streak++;
                 // play the audio file for this word
-                playAudio(ans);
+                playAudio(currentWords[currentIndex].romaji);
+                console.log('playing audio:', currentWords[currentIndex].romaji);
                 setTimeout(() => { currentIndex++; loadWord(); }, 500);
             } else {
                 romajiInput.classList.add('incorrect');
