@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>shiranui</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 600px;
+            padding: 1rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 5vw, 2.5rem);
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            font-weight: 800;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+        }
+
+        .card {
+            background: #1a1a1a;
+            border-radius: 20px;
+            padding: clamp(1.5rem, 5vw, 3rem);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            text-align: center;
+            position: relative;
+            transition: all 0.3s ease;
+            border: 1px solid #2a2a2a;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 70px rgba(16, 185, 129, 0.1);
+            border-color: #10b98115;
+        }
+
+        .japanese-word {
+            font-size: clamp(2.5rem, 10vw, 4rem);
+            margin-bottom: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            transition: all 0.3s ease;
+        }
+
+        .meaning {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            background: #1a1a1a;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-size: clamp(1rem, 3vw, 1.2rem);
+            color: #ffffff;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 10;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .japanese-word:hover + .meaning {
+            opacity: 1;
+        }
+
+        /* Touch support for mobile */
+        @media (hover: none) {
+            .japanese-word:active + .meaning {
+                opacity: 1;
+            }
+        }
+
+        .input-wrapper {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: clamp(1rem, 3vw, 1.2rem);
+            background: #0a0a0a;
+            border: 2px solid #2a2a2a;
+            border-radius: 12px;
+            color: #e0e0e0;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px #10b98120;
+        }
+
+        input.correct {
+            border-color: #10b981;
+            animation: correct 0.5s ease;
+        }
+
+        input.incorrect {
+            border-color: #ef4444;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        @keyframes correct {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .progress {
+            margin-top: 2rem;
+            text-align: center;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #1a1a1a;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px #10b98150;
+        }
+
+        .progress-text {
+            color: #666;
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+        }
+
+        .controls {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        button {
+            padding: 0.6rem 1.2rem;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            color: #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+        }
+
+        button:hover {
+            background: #2a2a2a;
+            border-color: #10b981;
+        }
+
+        .range-selector {
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .range-selector label {
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+        }
+
+        .range-selector input[type="number"] {
+            width: 60px;
+            padding: 0.4rem;
+            font-size: clamp(0.8rem, 2.5vw, 1rem);
+        }
+
+        .stats {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: #1a1a1a;
+            padding: 0.75rem;
+            border-radius: 10px;
+            border: 1px solid #2a2a2a;
+            font-size: clamp(0.7rem, 2vw, 0.9rem);
+        }
+
+        .complete-message {
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+            color: #10b981;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            color: #10b98115;
+            font-size: clamp(1rem, 3vw, 1.5rem);
+            animation: float 10s linear infinite;
+        }
+
+        @keyframes float {
+            from {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            to {
+                transform: translateY(-100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 480px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            .header {
+                margin-bottom: 1.5rem;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+
+            .japanese-word {
+                margin-bottom: 1rem;
+            }
+
+            .progress {
+                margin-top: 1.5rem;
+            }
+
+            .stats {
+                top: 0.5rem;
+                right: 0.5rem;
+                padding: 0.5rem;
+            }
+
+            .range-selector {
+                font-size: 0.8rem;
+            }
+
+            .meaning {
+                font-size: 1rem;
+                padding: 0.5rem 1rem;
+            }
+        }
+
+        /* Prevent mobile zoom on input focus */
+        @media (max-width: 768px) {
+            input {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="particles" id="particles"></div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>日本語 practice</h1>
+            <p class="subtitle">kaishi 1.5k deck • type the romaji</p>
+        </div>
+
+        <div class="range-selector">
+            <label>practice words from</label>
+            <input type="number" id="startRange" min="1" max="1500" value="1">
+            <label>to</label>
+            <input type="number" id="endRange" min="1" max="1500" value="10">
+            <button id="updateRangeBtn">update range</button>
+        </div>
+
+        <div class="card" id="card">
+            <div class="japanese-word" id="japaneseWord"></div>
+            <div class="meaning" id="meaning"></div>
+            <div class="input-wrapper">
+                <input type="text" id="romajiInput" placeholder="type romaji..." autocomplete="off">
+            </div>
+        </div>
+
+        <div class="progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText"></div>
+        </div>
+
+        <div class="controls">
+            <button id="resetBtn">restart</button>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div>streak: <span id="streak">0</span></div>
+        <div>accuracy: <span id="accuracy">0%</span></div>
+    </div>
+
+    <script type="module">
+        import kaishiWords from "./kaishiWords.js";
+
+        let currentWords = [];
+        let currentIndex = 0;
+        let streak = 0;
+        let correct = 0;
+        let total = 0;
+
+        const japaneseWordEl = document.getElementById('japaneseWord');
+        const meaningEl = document.getElementById('meaning');
+        const romajiInput = document.getElementById('romajiInput');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const streakEl = document.getElementById('streak');
+        const accuracyEl = document.getElementById('accuracy');
+
+        function updateRange() {
+            const start = parseInt(document.getElementById('startRange').value) - 1;
+            const end = parseInt(document.getElementById('endRange').value);
+            currentWords = kaishiWords.slice(start, end);
+            resetProgress();
+        }
+
+        function resetProgress() {
+            currentIndex = 0;
+            streak = 0;
+            correct = 0;
+            total = 0;
+            updateStats();
+            loadWord();
+        }
+
+        function loadWord() {
+            if (currentIndex >= currentWords.length) {
+                currentIndex = 0;
+                japaneseWordEl.innerHTML = '<div class="complete-message">ご苦労様でした nice job!</div>';
+                romajiInput.style.display = 'none';
+                setTimeout(() => {
+                    romajiInput.style.display = 'block';
+                    loadWord();
+                }, 2000);
+                return;
+            }
+
+            const word = currentWords[currentIndex];
+            japaneseWordEl.textContent = word.japanese;
+            meaningEl.textContent = `${word.romaji} • ${word.meaning}`;
+            romajiInput.value = '';
+            romajiInput.classList.remove('correct', 'incorrect');
+            romajiInput.focus();
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const progress = (currentIndex / currentWords.length) * 100;
+            progressFill.style.width = `${progress}%`;
+            progressText.textContent = `${currentIndex} / ${currentWords.length}`;
+        }
+
+        function updateStats() {
+            streakEl.textContent = streak;
+            const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+            accuracyEl.textContent = `${accuracy}%`;
+        }
+
+        function checkAnswer() {
+            const userAnswer = romajiInput.value.trim().toLowerCase();
+            const correctAnswer = currentWords[currentIndex].romaji.toLowerCase();
+            
+            total++;
+            
+            if (userAnswer === correctAnswer) {
+                romajiInput.classList.add('correct');
+                correct++;
+                streak++;
+                setTimeout(() => {
+                    currentIndex++;
+                    loadWord();
+                }, 500);
+            } else {
+                romajiInput.classList.add('incorrect');
+                streak = 0;
+                setTimeout(() => {
+                    romajiInput.classList.remove('incorrect');
+                }, 500);
+            }
+            
+            updateStats();
+        }
+
+        function skipWord() {
+            streak = 0;
+            currentIndex++;
+            loadWord();
+            updateStats();
+        }
+
+        romajiInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkAnswer();
+            }
+        });
+
+        // Create floating particles
+        function createParticles() {
+            const particles = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ'];
+            const container = document.getElementById('particles');
+            
+            for (let i = 0; i < 15; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.textContent = particles[Math.floor(Math.random() * particles.length)];
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 10 + 's';
+                particle.style.animationDuration = (10 + Math.random() * 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('updateRangeBtn').addEventListener('click', updateRange);
+        document.getElementById('resetBtn').addEventListener('click', resetProgress);
+
+        // Initialize
+        createParticles();
+        updateRange();
+    </script>
+</body>
+</html>
