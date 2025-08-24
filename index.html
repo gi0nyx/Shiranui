@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shiranui</title>
     <link rel="stylesheet" href="style.css">
+    <script src="node_modules/tiny-segmenter/dist/tiny-segmenter-0.2.0.js"></script>
+    <style>
+        /* Additional styles for particle highlighting */
+        .particle-word {
+            background: linear-gradient(135deg, #f59e0b20 0%, #f9731620 100%);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            border-bottom: 2px solid #f59e0b;
+            cursor: help;
+            transition: all 0.2s ease;
+        }
+
+        .particle-word:hover {
+            background: linear-gradient(135deg, #f59e0b30 0%, #f9731630 100%);
+            transform: translateY(-1px);
+        }
+    </style>
 </head>
 <body>
     <div class="particles" id="particles"></div>
@@ -276,16 +293,28 @@
             });
         });
 
-        /* ---------- Reading Analysis ---------- */
+        /* ---------- Reading Analysis with TinySegmenter ---------- */
         function updateReadingRange() {
             document.getElementById('readingRangeStart').textContent = startRangeEl.value;
             document.getElementById('readingRangeEnd').textContent = endRangeEl.value;
         }
 
+        // Common Japanese particles
+        const japaneseParticles = ['は', 'が', 'を', 'に', 'へ', 'で', 'と', 'から', 'まで', 'より', 'の', 'も', 'や', 'か', 'ね', 'よ', 'わ', 'ぞ', 'ぜ', 'な', 'さ', 'し', 'て', 'たり', 'だり', 'ごろ'];
+
         function analyzeText() {
             const inputText = document.getElementById('japaneseText').value;
             if (!inputText.trim()) return;
 
+            // Initialize TinySegmenter
+            const segmenter = new TinySegmenter();
+            
+            // Segment the text - this properly segments into words
+            const segments = segmenter.segment(inputText);
+            
+            console.log('Segmented text:', segments); // Debug output
+            
+            // Create a map of known words from current range
             const knownWordsMap = new Map();
             currentWords.forEach(word => {
                 knownWordsMap.set(word.japanese, word);
@@ -294,66 +323,43 @@
             let highlightedHTML = '';
             let knownCount = 0;
             let totalWords = 0;
-            const foundWords = new Set();
+            const foundWords = new Map();
 
-            // Simple tokenization - this could be improved with a proper tokenizer
-            let currentToken = '';
-            
-            for (let i = 0; i < inputText.length; i++) {
-                const char = inputText[i];
+            // Process each segment
+            segments.forEach(segment => {
+                // Skip empty segments
+                if (!segment || segment.trim() === '') {
+                    return;
+                }
                 
-                // Check if it's a Japanese character
-                if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(char)) {
-                    currentToken += char;
-                    
-                    // Check if current token matches any known word
-                    let matched = false;
-                    for (let len = currentToken.length; len > 0; len--) {
-                        const substring = currentToken.slice(-len);
-                        if (knownWordsMap.has(substring)) {
-                            // Found a match
-                            const prefix = currentToken.slice(0, -len);
-                            if (prefix) {
-                                highlightedHTML += `<span class="unknown-word">${prefix}</span>`;
-                            }
-                            highlightedHTML += `<span class="known-word" title="${knownWordsMap.get(substring).romaji} - ${knownWordsMap.get(substring).meaning}">${substring}</span>`;
-                            foundWords.add(substring);
-                            knownCount++;
-                            totalWords++;
-                            currentToken = '';
-                            matched = true;
-                            break;
-                        }
-                    }
-                } else {
-                    // Non-Japanese character
-                    if (currentToken) {
-                        // Check one more time for the complete token
-                        if (knownWordsMap.has(currentToken)) {
-                            highlightedHTML += `<span class="known-word" title="${knownWordsMap.get(currentToken).romaji} - ${knownWordsMap.get(currentToken).meaning}">${currentToken}</span>`;
-                            foundWords.add(currentToken);
-                            knownCount++;
-                        } else {
-                            highlightedHTML += `<span class="unknown-word">${currentToken}</span>`;
-                        }
-                        if (currentToken.length > 0) totalWords++;
-                        currentToken = '';
-                    }
-                    highlightedHTML += char;
+                // Handle punctuation - don't count as words
+                if (/^[、。！？「」『』（）\s]+$/.test(segment)) {
+                    highlightedHTML += segment;
+                    return;
                 }
-            }
-            
-            // Handle any remaining token
-            if (currentToken) {
-                if (knownWordsMap.has(currentToken)) {
-                    highlightedHTML += `<span class="known-word" title="${knownWordsMap.get(currentToken).romaji} - ${knownWordsMap.get(currentToken).meaning}">${currentToken}</span>`;
-                    foundWords.add(currentToken);
+
+                // Check if it's a particle
+                if (japaneseParticles.includes(segment)) {
+                    highlightedHTML += `<span class="particle-word" title="Particle: ${segment}">${segment}</span>`;
+                    totalWords++;
+                    return;
+                }
+
+                // Check if this exact segment is in our known words
+                if (knownWordsMap.has(segment)) {
+                    const wordData = knownWordsMap.get(segment);
+                    highlightedHTML += `<span class="known-word" title="${wordData.romaji} - ${wordData.meaning}">${segment}</span>`;
+                    if (!foundWords.has(segment)) {
+                        foundWords.set(segment, wordData);
+                    }
                     knownCount++;
+                    totalWords++;
                 } else {
-                    highlightedHTML += `<span class="unknown-word">${currentToken}</span>`;
+                    // Not a known word - mark as unknown
+                    highlightedHTML += `<span class="unknown-word">${segment}</span>`;
+                    totalWords++;
                 }
-                if (currentToken.length > 0) totalWords++;
-            }
+            });
 
             // Update display
             document.getElementById('highlightedText').innerHTML = highlightedHTML;
@@ -366,8 +372,7 @@
             // Display found words list
             const wordsList = document.getElementById('wordsListContent');
             wordsList.innerHTML = '';
-            foundWords.forEach(word => {
-                const wordData = knownWordsMap.get(word);
+            foundWords.forEach((wordData, word) => {
                 const wordEl = document.createElement('div');
                 wordEl.className = 'word-item';
                 wordEl.innerHTML = `
@@ -381,6 +386,8 @@
             document.getElementById('analysisResults').style.display = 'block';
             if (foundWords.size > 0) {
                 document.getElementById('knownWordsList').style.display = 'block';
+            } else {
+                document.getElementById('knownWordsList').style.display = 'none';
             }
         }
 
