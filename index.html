@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shiranui</title>
     <link rel="stylesheet" href="style.css">
-    <script src="tiny-segmenter-0.2.0.js"></script>
     <style>
         /* Additional styles for particle highlighting */
         .particle-word {
@@ -123,6 +122,7 @@
 
     <script type="module">
         import kaishiWords from './kaishiWords.js';
+        import TinySegmenter from './tiny-segmenter-0.2.0.js'
 
         /* ---------- Storage Keys ---------- */
         const STORAGE_KEYS = {
