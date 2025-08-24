@@ -226,7 +226,7 @@
             statusEl.style.display = 'block';
             statusEl.textContent = 'Loading Japanese analyzer...';
 
-            kuromoji.builder({ dicPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict" }).build((err, newTokenizer) => {
+            kuromoji.builder({ dicPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/" }).build((err, newTokenizer) => {
                 if (err) {
                     console.error('Failed to load tokenizer:', err);
                     statusEl.textContent = 'Failed to load analyzer. Basic matching will be used.';
