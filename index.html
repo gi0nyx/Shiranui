@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <!-- Add Kuromoji for morphological analysis -->
   <script defer
-  src="./vendor/kuromoji/kuromoji.js">
+  src="public/vendor/kuromoji/kuromoji.js">
 </script>
 
     <style>
@@ -223,7 +223,7 @@
             statusEl.style.display = 'block';
             statusEl.textContent = 'Loading Japanese analyzer...';
 
-            kuromoji.builder({ dicPath: "./vendor/kuromoji/dict/" }).build((err, newTokenizer) => {
+            kuromoji.builder({ dicPath: "public/vendor/kuromoji/dict/" }).build((err, newTokenizer) => {
                 if (err) {
                     console.error('Failed to load tokenizer:', err);
                     statusEl.textContent = 'Failed to load analyzer. Basic matching will be used.';
