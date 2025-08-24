@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shiranui</title>
-
-    <!-- external stylesheet -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,28 +15,88 @@
             <p class="subtitle">kaishi 1.5k deck • type the romaji</p>
         </div>
 
-        <div class="range-selector">
-            <label>practice words from</label>
-            <input type="number" id="startRange" min="1" max="1500" value="1">
-            <label>to</label>
-            <input type="number" id="endRange" min="1" max="1500" value="10">
-            <button id="updateRangeBtn">update range</button>
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" data-tab="practice">Practice</button>
+            <button class="tab-btn" data-tab="reading">Reading</button>
         </div>
 
-        <div class="card" id="card">
-            <div class="japanese-word" id="japaneseWord"></div>
-            <div class="meaning" id="meaning"></div>
-            <div class="input-wrapper">
-                <input type="text" id="romajiInput" placeholder="type romaji..." autocomplete="off">
+        <!-- Practice Tab -->
+        <div class="tab-content active" id="practice-tab">
+            <div class="range-selector">
+                <label>practice words from</label>
+                <input type="number" id="startRange" min="1" max="1500" value="1">
+                <label>to</label>
+                <input type="number" id="endRange" min="1" max="1500" value="10">
+                <button id="updateRangeBtn">update range</button>
+            </div>
+
+            <div class="card" id="card">
+                <div class="japanese-word" id="japaneseWord"></div>
+                <div class="meaning" id="meaning"></div>
+                <div class="input-wrapper">
+                    <input type="text" id="romajiInput" placeholder="type romaji..." autocomplete="off">
+                </div>
+            </div>
+
+            <div class="progress">
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="progress-text" id="progressText"></div>
+            </div>
+
+            <div class="controls">
+                <button id="resetBtn">restart</button>
+                <button id="clearProgressBtn">clear saved progress</button>
             </div>
         </div>
 
-        <div class="progress">
-            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-            <div class="progress-text" id="progressText"></div>
-        </div>
+        <!-- Reading Tab -->
+        <div class="tab-content" id="reading-tab">
+            <div class="reading-controls">
+                <div class="range-display">
+                    <span>Using words from <strong id="readingRangeStart">1</strong> to <strong id="readingRangeEnd">10</strong></span>
+                </div>
+            </div>
 
-        <div class="controls"><button id="resetBtn">restart</button></div>
+            <div class="reading-section">
+                <div class="input-section">
+                    <label for="japaneseText">Enter Japanese text to analyze:</label>
+                    <textarea 
+                        id="japaneseText" 
+                        placeholder="日本語のテキストを入力してください..."
+                        rows="6"
+                    ></textarea>
+                    <button id="analyzeBtn">Analyze Text</button>
+                </div>
+
+                <div class="analysis-results" id="analysisResults" style="display: none;">
+                    <div class="stats-card">
+                        <div class="stat-item">
+                            <span class="stat-label">Words Known</span>
+                            <span class="stat-value" id="knownWordsCount">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Words</span>
+                            <span class="stat-value" id="totalWordsCount">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Coverage</span>
+                            <span class="stat-value" id="coveragePercent">0%</span>
+                        </div>
+                    </div>
+
+                    <div class="highlighted-text-container">
+                        <h3>Analyzed Text</h3>
+                        <div id="highlightedText" class="highlighted-text"></div>
+                    </div>
+
+                    <div class="known-words-list" id="knownWordsList" style="display: none;">
+                        <h3>Known Words Found</h3>
+                        <div id="wordsListContent" class="words-grid"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="stats">
@@ -48,6 +106,13 @@
 
     <script type="module">
         import kaishiWords from './kaishiWords.js';
+
+        /* ---------- Storage Keys ---------- */
+        const STORAGE_KEYS = {
+            RANGE: 'shiranui_range',
+            PROGRESS: 'shiranui_progress',
+            STATS: 'shiranui_stats'
+        };
 
         /* ---------- audio helper ---------- */
         const audio = new Audio();
@@ -69,19 +134,73 @@
         const progressText   = document.getElementById('progressText');
         const streakEl       = document.getElementById('streak');
         const accuracyEl     = document.getElementById('accuracy');
+        const startRangeEl   = document.getElementById('startRange');
+        const endRangeEl     = document.getElementById('endRange');
+
+        /* ---------- Local Storage Functions ---------- */
+        function saveProgress() {
+            const progressData = {
+                currentIndex,
+                streak,
+                correct,
+                total,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(progressData));
+        }
+
+        function loadProgress() {
+            const saved = localStorage.getItem(STORAGE_KEYS.PROGRESS);
+            if (saved) {
+                const data = JSON.parse(saved);
+                currentIndex = data.currentIndex || 0;
+                streak = data.streak || 0;
+                correct = data.correct || 0;
+                total = data.total || 0;
+                updateStats();
+            }
+        }
+
+        function saveRange() {
+            const rangeData = {
+                start: startRangeEl.value,
+                end: endRangeEl.value
+            };
+            localStorage.setItem(STORAGE_KEYS.RANGE, JSON.stringify(rangeData));
+        }
+
+        function loadRange() {
+            const saved = localStorage.getItem(STORAGE_KEYS.RANGE);
+            if (saved) {
+                const data = JSON.parse(saved);
+                startRangeEl.value = data.start;
+                endRangeEl.value = data.end;
+            }
+        }
+
+        function clearProgress() {
+            localStorage.removeItem(STORAGE_KEYS.PROGRESS);
+            localStorage.removeItem(STORAGE_KEYS.STATS);
+            resetProgress();
+        }
 
         /* ---------- core ---------- */
         function updateRange() {
-            const start = +document.getElementById('startRange').value - 1;
-            const end   = +document.getElementById('endRange').value;
+            const start = +startRangeEl.value - 1;
+            const end   = +endRangeEl.value;
             currentWords = kaishiWords.slice(start, end);
+            saveRange();
             resetProgress();
+            updateReadingRange();
         }
+
         function resetProgress() {
             currentIndex = streak = correct = total = 0;
             updateStats();
             loadWord();
+            saveProgress();
         }
+
         function loadWord() {
             if (currentIndex >= currentWords.length) {
                 currentIndex = 0;
@@ -89,6 +208,7 @@
                     '<div class="complete-message">ご苦労様でした nice job!</div>';
                 romajiInput.style.display = 'none';
                 setTimeout(() => { romajiInput.style.display = 'block'; loadWord(); }, 2000);
+                saveProgress();
                 return;
             }
             const w = currentWords[currentIndex];
@@ -99,15 +219,18 @@
             romajiInput.focus();
             updateProgress();
         }
+
         function updateProgress() {
             const pct = (currentIndex / currentWords.length) * 100;
             progressFill.style.width = pct + '%';
             progressText.textContent = `${currentIndex} / ${currentWords.length}`;
         }
+
         function updateStats() {
             streakEl.textContent = streak;
             accuracyEl.textContent = total ? `${Math.round(correct/total*100)}%` : '0%';
         }
+
         function checkAnswer() {
             const user = romajiInput.value.trim().toLowerCase();
             const ans  = currentWords[currentIndex].romaji.toLowerCase();
@@ -116,18 +239,149 @@
             if (user === ans) {
                 romajiInput.classList.add('correct');
                 correct++; streak++;
-                // play the audio file for this word
                 playAudio(currentWords[currentIndex].romaji);
                 console.log('playing audio:', currentWords[currentIndex].romaji);
-                setTimeout(() => { currentIndex++; loadWord(); }, 500);
+                setTimeout(() => { 
+                    currentIndex++; 
+                    loadWord(); 
+                    saveProgress();
+                }, 500);
             } else {
                 romajiInput.classList.add('incorrect');
                 streak = 0;
-                // play zenzen for wrong answer
                 playAudio('zenzen');
                 setTimeout(() => romajiInput.classList.remove('incorrect'), 500);
             }
             updateStats();
+            saveProgress();
+        }
+
+        /* ---------- Tab Navigation ---------- */
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetTab = btn.dataset.tab;
+                
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                
+                btn.classList.add('active');
+                document.getElementById(`${targetTab}-tab`).classList.add('active');
+                
+                if (targetTab === 'reading') {
+                    updateReadingRange();
+                }
+            });
+        });
+
+        /* ---------- Reading Analysis ---------- */
+        function updateReadingRange() {
+            document.getElementById('readingRangeStart').textContent = startRangeEl.value;
+            document.getElementById('readingRangeEnd').textContent = endRangeEl.value;
+        }
+
+        function analyzeText() {
+            const inputText = document.getElementById('japaneseText').value;
+            if (!inputText.trim()) return;
+
+            const knownWordsMap = new Map();
+            currentWords.forEach(word => {
+                knownWordsMap.set(word.japanese, word);
+            });
+
+            let highlightedHTML = '';
+            let knownCount = 0;
+            let totalWords = 0;
+            const foundWords = new Set();
+
+            // Simple tokenization - this could be improved with a proper tokenizer
+            let currentToken = '';
+            
+            for (let i = 0; i < inputText.length; i++) {
+                const char = inputText[i];
+                
+                // Check if it's a Japanese character
+                if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(char)) {
+                    currentToken += char;
+                    
+                    // Check if current token matches any known word
+                    let matched = false;
+                    for (let len = currentToken.length; len > 0; len--) {
+                        const substring = currentToken.slice(-len);
+                        if (knownWordsMap.has(substring)) {
+                            // Found a match
+                            const prefix = currentToken.slice(0, -len);
+                            if (prefix) {
+                                highlightedHTML += `<span class="unknown-word">${prefix}</span>`;
+                            }
+                            highlightedHTML += `<span class="known-word" title="${knownWordsMap.get(substring).romaji} - ${knownWordsMap.get(substring).meaning}">${substring}</span>`;
+                            foundWords.add(substring);
+                            knownCount++;
+                            totalWords++;
+                            currentToken = '';
+                            matched = true;
+                            break;
+                        }
+                    }
+                } else {
+                    // Non-Japanese character
+                    if (currentToken) {
+                        // Check one more time for the complete token
+                        if (knownWordsMap.has(currentToken)) {
+                            highlightedHTML += `<span class="known-word" title="${knownWordsMap.get(currentToken).romaji} - ${knownWordsMap.get(currentToken).meaning}">${currentToken}</span>`;
+                            foundWords.add(currentToken);
+                            knownCount++;
+                        } else {
+                            highlightedHTML += `<span class="unknown-word">${currentToken}</span>`;
+                        }
+                        if (currentToken.length > 0) totalWords++;
+                        currentToken = '';
+                    }
+                    highlightedHTML += char;
+                }
+            }
+            
+            // Handle any remaining token
+            if (currentToken) {
+                if (knownWordsMap.has(currentToken)) {
+                    highlightedHTML += `<span class="known-word" title="${knownWordsMap.get(currentToken).romaji} - ${knownWordsMap.get(currentToken).meaning}">${currentToken}</span>`;
+                    foundWords.add(currentToken);
+                    knownCount++;
+                } else {
+                    highlightedHTML += `<span class="unknown-word">${currentToken}</span>`;
+                }
+                if (currentToken.length > 0) totalWords++;
+            }
+
+            // Update display
+            document.getElementById('highlightedText').innerHTML = highlightedHTML;
+            document.getElementById('knownWordsCount').textContent = knownCount;
+            document.getElementById('totalWordsCount').textContent = totalWords;
+            document.getElementById('coveragePercent').textContent = totalWords > 0 
+                ? `${Math.round((knownCount / totalWords) * 100)}%` 
+                : '0%';
+
+            // Display found words list
+            const wordsList = document.getElementById('wordsListContent');
+            wordsList.innerHTML = '';
+            foundWords.forEach(word => {
+                const wordData = knownWordsMap.get(word);
+                const wordEl = document.createElement('div');
+                wordEl.className = 'word-item';
+                wordEl.innerHTML = `
+                    <span class="word-japanese">${word}</span>
+                    <span class="word-romaji">${wordData.romaji}</span>
+                    <span class="word-meaning">${wordData.meaning}</span>
+                `;
+                wordsList.appendChild(wordEl);
+            });
+
+            document.getElementById('analysisResults').style.display = 'block';
+            if (foundWords.size > 0) {
+                document.getElementById('knownWordsList').style.display = 'block';
+            }
         }
 
         /* ---------- particles ---------- */
@@ -149,10 +403,15 @@
         romajiInput.addEventListener('keypress', e => { if (e.key === 'Enter') checkAnswer(); });
         document.getElementById('updateRangeBtn').addEventListener('click', updateRange);
         document.getElementById('resetBtn').addEventListener('click', resetProgress);
+        document.getElementById('clearProgressBtn').addEventListener('click', clearProgress);
+        document.getElementById('analyzeBtn').addEventListener('click', analyzeText);
 
         /* ---------- boot ---------- */
         createParticles();
+        loadRange();
         updateRange();
+        loadProgress();
+        loadWord();
     </script>
 </body>
 </html>
