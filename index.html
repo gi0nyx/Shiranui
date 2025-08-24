@@ -146,11 +146,11 @@
                 <div class="analysis-results" id="analysisResults" style="display: none;">
                     <div class="stats-card">
                         <div class="stat-item">
-                            <span class="stat-label">Words Known</span>
+                            <span class="stat-label">Unique Words Known</span>
                             <span class="stat-value" id="knownWordsCount">0</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-label">Total Words</span>
+                            <span class="stat-label">Unique Total Words</span>
                             <span class="stat-value" id="totalWordsCount">0</span>
                         </div>
                         <div class="stat-item">
@@ -393,177 +393,202 @@
             document.getElementById('readingRangeEnd').textContent = endRangeEl.value;
         }
 
-        function analyzeText() {
-            const inputText = document.getElementById('japaneseText').value;
-            if (!inputText.trim()) return;
+function analyzeText() {
+    const inputText = document.getElementById('japaneseText').value;
+    if (!inputText.trim()) return;
 
-            if (!tokenizer) {
-                alert('Japanese analyzer is still loading. Please wait a moment and try again.');
-                return;
+    if (!tokenizer) {
+        alert('Japanese analyzer is still loading. Please wait a moment and try again.');
+        return;
+    }
+
+    // Tokenize with Kuromoji for morphological analysis
+    const tokens = tokenizer.tokenize(inputText);
+    console.log('Tokens:', tokens);
+
+    // Create maps for known words
+    const knownWordsMap = new Map();
+    const knownBaseFormsMap = new Map(); // kept as-is
+    const knownReadingsMap = new Map();  // reading (hiragana) -> [wordData]
+
+    // Build maps, including readings derived via kuromoji
+    currentWords.forEach(word => {
+        knownWordsMap.set(word.japanese, word);
+        knownBaseFormsMap.set(word.japanese, word);
+
+        // Derive reading for the word using kuromoji (join sub-token readings)
+        const wTokens = tokenizer.tokenize(word.japanese);
+        let katakanaReading = wTokens.map(t => {
+            if (t.reading && t.reading !== '*') return t.reading;
+            // Fallback: if reading is missing, use surface form
+            return t.surface_form;
+        }).join('');
+        const hiraReading = katakanaToHiragana(katakanaReading);
+
+        if (hiraReading) {
+            if (!knownReadingsMap.has(hiraReading)) {
+                knownReadingsMap.set(hiraReading, []);
             }
-
-            // Tokenize with Kuromoji for morphological analysis
-            const tokens = tokenizer.tokenize(inputText);
-            console.log('Tokens:', tokens);
-
-            // Create maps for known words
-            const knownWordsMap = new Map();
-            const knownBaseFormsMap = new Map(); // (kept as-is)
-            const knownReadingsMap = new Map();  // NEW: reading (hiragana) -> [wordData]
-
-            // Build maps, including readings derived via kuromoji
-            currentWords.forEach(word => {
-                knownWordsMap.set(word.japanese, word);
-                knownBaseFormsMap.set(word.japanese, word);
-
-                // Derive reading for the word using kuromoji (join sub-token readings)
-                const wTokens = tokenizer.tokenize(word.japanese);
-                let katakanaReading = wTokens.map(t => {
-                    if (t.reading && t.reading !== '*') return t.reading;
-                    // Fallback: if reading is missing, use surface form
-                    return t.surface_form;
-                }).join('');
-                const hiraReading = katakanaToHiragana(katakanaReading);
-
-                if (hiraReading) {
-                    if (!knownReadingsMap.has(hiraReading)) {
-                        knownReadingsMap.set(hiraReading, []);
-                    }
-                    knownReadingsMap.get(hiraReading).push(word);
-                }
-            });
-
-            let highlightedHTML = '';
-            let knownCount = 0;
-            let conjugatedCount = 0;
-            let totalWords = 0;
-            const foundWords = new Map();
-            const recognizedForms = new Map();
-
-            tokens.forEach(token => {
-                const surface = token.surface_form;
-                const baseForm = token.basic_form;
-                const pos = token.pos; // Part of speech
-                const posDetail = token.pos_detail_1;
-                const readingHira = (token.reading && token.reading !== '*')
-                    ? katakanaToHiragana(token.reading)
-                    : null;
-
-                // Skip punctuation
-                if (pos === '記号') {
-                    highlightedHTML += surface;
-                    return;
-                }
-
-                // Check for particles
-                if (pos === '助詞' || pos === '助動詞') {
-                    highlightedHTML += `<span class="particle-word" title="Particle: ${surface} (${posDetail})">${surface}</span>`;
-                    totalWords++;
-                    return;
-                }
-
-                // 1) Exact surface match
-                if (knownWordsMap.has(surface)) {
-                    const wordData = knownWordsMap.get(surface);
-                    highlightedHTML += `<span class="known-word" title="${wordData.romaji} - ${wordData.meaning}">${surface}</span>`;
-                    if (!foundWords.has(surface)) {
-                        foundWords.set(surface, wordData);
-                    }
-                    knownCount++;
-                    totalWords++;
-                }
-                // 2) Dictionary/base-form match (conjugations)
-                else if (baseForm && baseForm !== surface && knownWordsMap.has(baseForm)) {
-                    const wordData = knownWordsMap.get(baseForm);
-                    highlightedHTML += `<span class="conjugated-word" title="Base: ${baseForm} (${wordData.romaji}) - ${wordData.meaning}">${surface}</span>`;
-                    
-                    // Track the conjugated form
-                    if (!recognizedForms.has(baseForm)) {
-                        recognizedForms.set(baseForm, {
-                            base: wordData,
-                            forms: new Set()
-                        });
-                    }
-                    recognizedForms.get(baseForm).forms.add(surface);
-                    
-                    conjugatedCount++;
-                    knownCount++; // Count as known since we know the base form
-                    totalWords++;
-                }
-                // 3) NEW: Reading-based match (e.g., 私 ⇄ わたし)
-                else if (readingHira && knownReadingsMap.has(readingHira)) {
-                    const candidates = knownReadingsMap.get(readingHira);
-                    // Pick the first candidate (homophones may exist)
-                    const wordData = candidates[0];
-                    const title = candidates.length === 1
-                        ? `Reading match: ${wordData.japanese} (${wordData.romaji}) - ${wordData.meaning}`
-                        : `Reading match (homophones): ${candidates.map(c => c.japanese).join(' / ')} • ${wordData.romaji} - ${wordData.meaning}`;
-                    highlightedHTML += `<span class="known-word" title="${title}">${surface}</span>`;
-
-                    const key = wordData.japanese;
-                    if (!foundWords.has(key)) {
-                        foundWords.set(key, wordData);
-                    }
-                    knownCount++;
-                    totalWords++;
-                }
-                // 4) Unknown but with grammatical info
-                else if (baseForm && baseForm !== '*') {
-                    highlightedHTML += `<span class="unknown-word" title="Base: ${baseForm} (${pos})">${surface}</span>`;
-                    totalWords++;
-                }
-                // 5) Completely unknown
-                else {
-                    highlightedHTML += `<span class="unknown-word">${surface}</span>`;
-                    totalWords++;
-                }
-            });
-
-            // Update display
-            document.getElementById('highlightedText').innerHTML = highlightedHTML;
-            document.getElementById('knownWordsCount').textContent = knownCount;
-            document.getElementById('totalWordsCount').textContent = totalWords;
-            document.getElementById('coveragePercent').textContent = totalWords > 0 
-                ? `${Math.round((knownCount / totalWords) * 100)}%` 
-                : '0%';
-
-            // Display found words list
-            const wordsList = document.getElementById('wordsListContent');
-            wordsList.innerHTML = '';
-            foundWords.forEach((wordData, word) => {
-                const wordEl = document.createElement('div');
-                wordEl.className = 'word-item';
-                wordEl.innerHTML = `
-                    <span class="word-japanese">${word}</span>
-                    <span class="word-romaji">${wordData.romaji}</span>
-                    <span class="word-meaning">${wordData.meaning}</span>
-                `;
-                wordsList.appendChild(wordEl);
-            });
-
-            // Display recognized forms
-            if (recognizedForms.size > 0) {
-                const formsEl = document.getElementById('recognizedForms');
-                formsEl.innerHTML = '';
-                
-                recognizedForms.forEach((data, baseForm) => {
-                    const formDiv = document.createElement('div');
-                    formDiv.style.marginBottom = '0.5rem';
-                    formDiv.innerHTML = `
-                        <strong>${baseForm}</strong> (${data.base.romaji}): 
-                        ${Array.from(data.forms).map(f => `<span class="form-item matched">${f}</span>`).join('')}
-                    `;
-                    formsEl.appendChild(formDiv);
-                });
-                
-                document.getElementById('dictionaryInfo').style.display = 'block';
-            } else {
-                document.getElementById('dictionaryInfo').style.display = 'none';
-            }
-
-            document.getElementById('analysisResults').style.display = 'block';
-            document.getElementById('knownWordsList').style.display = foundWords.size > 0 ? 'block' : 'none';
+            knownReadingsMap.get(hiraReading).push(word);
         }
+    });
+
+    // Helpers
+    const isPunctuation = (pos) => pos === '記号';
+    const isParticleLike = (pos) => pos === '助詞' || pos === '助動詞';
+
+    // We will count UNIQUE, non-particle words only
+    const uniqueWordKeys = new Set();      // all unique non-particle words
+    const knownUniqueKeys = new Set();     // subset of uniqueWordKeys that are known
+    const foundWords = new Map();          // key -> wordData (for the Known Words list; known-only)
+    const recognizedForms = new Map();     // baseForm -> { base: wordData, forms: Set<string> }
+
+    let highlightedHTML = '';
+    let conjugatedCount = 0; // (not displayed, but preserved)
+    // We will set knownCount/totalWords from the sets at the end
+    let knownCount = 0;
+    let totalWords = 0;
+
+    tokens.forEach(token => {
+        const surface = token.surface_form;
+        const baseForm = token.basic_form;
+        const pos = token.pos; // Part of speech
+        const posDetail = token.pos_detail_1;
+        const readingHira = (token.reading && token.reading !== '*')
+            ? katakanaToHiragana(token.reading)
+            : null;
+
+        // Skip punctuation entirely from highlight counting logic (but still render it)
+        if (isPunctuation(pos)) {
+            highlightedHTML += surface;
+            return;
+        }
+
+        // Particles/auxiliaries: highlight, but do NOT count in totals/uniques
+        if (isParticleLike(pos)) {
+            highlightedHTML += `<span class="particle-word" title="Particle: ${surface} (${posDetail})">${surface}</span>`;
+            return;
+        }
+
+        // Decide how to highlight and what the canonical unique key is
+        let canonicalKey = null;
+        let matchedKnown = false;
+
+        // 1) Exact surface match
+        if (knownWordsMap.has(surface)) {
+            const wordData = knownWordsMap.get(surface);
+            highlightedHTML += `<span class="known-word" title="${wordData.romaji} - ${wordData.meaning}">${surface}</span>`;
+            canonicalKey = wordData.japanese; // surface == dictionary form here
+            matchedKnown = true;
+
+            if (!foundWords.has(canonicalKey)) {
+                foundWords.set(canonicalKey, wordData);
+            }
+        }
+        // 2) Dictionary/base-form match (conjugations)
+        else if (baseForm && baseForm !== surface && knownWordsMap.has(baseForm)) {
+            const wordData = knownWordsMap.get(baseForm);
+            highlightedHTML += `<span class="conjugated-word" title="Base: ${baseForm} (${wordData.romaji}) - ${wordData.meaning}">${surface}</span>`;
+
+            if (!recognizedForms.has(baseForm)) {
+                recognizedForms.set(baseForm, {
+                    base: wordData,
+                    forms: new Set()
+                });
+            }
+            recognizedForms.get(baseForm).forms.add(surface);
+
+            canonicalKey = baseForm; // count by dictionary base form
+            matchedKnown = true;
+            conjugatedCount++;
+
+            if (!foundWords.has(baseForm)) {
+                foundWords.set(baseForm, wordData);
+            }
+        }
+        // 3) Reading-based match (e.g., 私 ⇄ わたし)
+        else if (readingHira && knownReadingsMap.has(readingHira)) {
+            const candidates = knownReadingsMap.get(readingHira);
+            const wordData   = candidates[0]; // pick first; homophones possible
+            const title = candidates.length === 1
+                ? `Reading match: ${wordData.japanese} (${wordData.romaji}) - ${wordData.meaning}`
+                : `Reading match (homophones): ${candidates.map(c => c.japanese).join(' / ')} • ${wordData.romaji} - ${wordData.meaning}`;
+            highlightedHTML += `<span class="known-word" title="${title}">${surface}</span>`;
+
+            canonicalKey = wordData.japanese; // count using the known dictionary entry
+            matchedKnown = true;
+
+            if (!foundWords.has(canonicalKey)) {
+                foundWords.set(canonicalKey, wordData);
+            }
+        }
+        // 4) Unknown but with grammatical info (non-particle)
+        else if (baseForm && baseForm !== '*') {
+            highlightedHTML += `<span class="unknown-word" title="Base: ${baseForm} (${pos})">${surface}</span>`;
+            canonicalKey = baseForm; // use base form to dedupe variants
+        }
+        // 5) Completely unknown (non-particle)
+        else {
+            highlightedHTML += `<span class="unknown-word">${surface}</span>`;
+            canonicalKey = surface;
+        }
+
+        // Count UNIQUE, non-particle words only
+        if (canonicalKey) {
+            uniqueWordKeys.add(canonicalKey);
+            if (matchedKnown) knownUniqueKeys.add(canonicalKey);
+        }
+    });
+
+    // Compute unique counts & coverage
+    knownCount = knownUniqueKeys.size;
+    totalWords = uniqueWordKeys.size;
+
+    // Update display
+    document.getElementById('highlightedText').innerHTML = highlightedHTML;
+    document.getElementById('knownWordsCount').textContent = knownCount;
+    document.getElementById('totalWordsCount').textContent = totalWords;
+    document.getElementById('coveragePercent').textContent = totalWords > 0
+        ? `${Math.round((knownCount / totalWords) * 100)}%`
+        : '0%';
+
+    // Display found words list (unique, known only)
+    const wordsList = document.getElementById('wordsListContent');
+    wordsList.innerHTML = '';
+    foundWords.forEach((wordData, key) => {
+        const wordEl = document.createElement('div');
+        wordEl.className = 'word-item';
+        wordEl.innerHTML = `
+            <span class="word-japanese">${key}</span>
+            <span class="word-romaji">${wordData.romaji}</span>
+            <span class="word-meaning">${wordData.meaning}</span>
+        `;
+        wordsList.appendChild(wordEl);
+    });
+
+    // Display recognized conjugated forms (base form -> unique surface forms seen)
+    if (recognizedForms.size > 0) {
+        const formsEl = document.getElementById('recognizedForms');
+        formsEl.innerHTML = '';
+
+        recognizedForms.forEach((data, baseForm) => {
+            const formDiv = document.createElement('div');
+            formDiv.style.marginBottom = '0.5rem';
+            formDiv.innerHTML = `
+                <strong>${baseForm}</strong> (${data.base.romaji}): 
+                ${Array.from(data.forms).map(f => `<span class="form-item matched">${f}</span>`).join('')}
+            `;
+            formsEl.appendChild(formDiv);
+        });
+
+        document.getElementById('dictionaryInfo').style.display = 'block';
+    } else {
+        document.getElementById('dictionaryInfo').style.display = 'none';
+    }
+
+    document.getElementById('analysisResults').style.display = 'block';
+    document.getElementById('knownWordsList').style.display = foundWords.size > 0 ? 'block' : 'none';
+}
 
         /* ---------- particles ---------- */
         function createParticles() {
